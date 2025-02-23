@@ -1,0 +1,47 @@
+/* SAS EG 8.1- Go to Preferences > Programs >Insert custom code before submitted code*/
+filename LogFile temp;
+Proc printto log=LogFile new;
+run;
+ 
+
+/* Insert custom code after submitted code here */
+proc printto;
+run;
+ 
+options   nosource nosource2   /* removes following code from log  */ ;    
+ 
+ 
+%let _NOTE_CHECK_ =is uninitialized|Invalid|MERGE statement has more than one
+data set|values have been converted|Input data set is empty|W.D format|Missing
+values were generated|Unknown|will be overwritten by|Division by zero|Format was to
+small|truncated|Division by zero|ERROR|The SAS System stopped|ALERT_P|values have been converted
+|format was too small |ALERT_R |missing value |Invalid data |quoted string currently being |ALERT_C
+   ;
+
+ 
+data _null_;
+infile LogFile truncover lrecl=30000;
+input;
+length content$30000;
+content=_infile_;
+/* Change ERROR \d-\d to ERROR: */
+content = prxchange('s/ERROR( +\d+-\d+: +)/ERROR:\1/o', 1,content);
+/* Change PRG-ERROR: to ERROR: for %m_adam_create special log*/
+content = prxchange('s/^PRG-ERROR:/ERROR:\1/o', 1,content);
+/* Replace special notes with warning*/
+pattern = prxparse("/(?<=^NOTE:).+\b(&_NOTE_CHECK_)\b/o");
+if prxmatch(pattern, content) then do;
+content = prxchange('s/^NOTE: /WARNING: /o',1,strip(content));
+end;
+pattern = prxparse("/(?<=^INFO:).+\b(&_NOTE_CHECK_)\b/o");
+if prxmatch(pattern, content) then do;
+content = prxchange('s/^INFO: /WARNING: /o',1,strip(content));
+end;
+/* put log out*/
+len=length(content);
+putlog content $varying200. len;
+run;
+%symdel _NOTE_CHECK_;
+ 
+options source source2;
+ 
